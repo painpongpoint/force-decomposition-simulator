@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive 2D simulator for resolving forces along an inclined wall.">
+  <meta property="og:title" content="Force Decomposition Lab">
+  <meta property="og:description" content="Resolve any force. Rotate the wall through 360 degrees.">
+  <meta property="og:image" content="./public/og.png">
+  <link rel="icon" href="./public/favicon.svg" type="image/svg+xml">
+  <title>Force Decomposition Lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f4f0e8;
+      --muted: #98a8b9;
+      --night: #071626;
+      --panel: #0c2035;
+      --line: #25425a;
+      --amber: #ffb43b;
+      --cyan: #55cbed;
+      --mint: #8bf0c0;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--night); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 72% 9%, rgba(44, 105, 148, .22), transparent 32rem),
+        linear-gradient(180deg, #08192a 0%, var(--night) 100%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .page-shell { width: min(1160px, calc(100% - 40px)); margin: 0 auto; padding: 72px 0 32px; }
+    .hero { max-width: 790px; margin-bottom: 42px; }
+    .eyebrow { margin: 0 0 18px; color: var(--amber); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .78rem; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 0; max-width: 780px; font-size: clamp(3rem, 7.5vw, 6.7rem); line-height: .93; letter-spacing: -.065em; font-weight: 500; }
+    .hero-copy { max-width: 660px; margin: 25px 0 0; color: var(--muted); font-size: clamp(1rem, 2vw, 1.2rem); line-height: 1.65; }
+    .simulator { overflow: hidden; border: 1px solid var(--line); border-radius: 24px; background: rgba(12, 32, 53, .78); box-shadow: 0 34px 80px rgba(0, 0, 0, .28); backdrop-filter: blur(12px); }
+    .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+    .control { display: block; padding: 21px 24px 18px; background: var(--panel); }
+    .control > span { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .control strong { font-size: .87rem; font-weight: 500; }
+    .control output { color: var(--amber); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .92rem; }
+    .control input { width: 100%; margin: 17px 0 7px; accent-color: var(--amber); cursor: pointer; }
+    .control small { display: flex; justify-content: space-between; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .68rem; }
+    .diagram-wrap { padding: 10px 20px 18px; }
+    .diagram-wrap svg { display: block; width: 100%; height: auto; max-height: 600px; }
+    .grid-line { fill: none; stroke: var(--line); stroke-width: .7; opacity: .6; }
+    .axis-line { stroke: var(--line); stroke-width: 1; stroke-dasharray: 6 7; }
+    .wall-line { stroke: var(--ink); stroke-width: 7; stroke-linecap: round; }
+    .construction-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 6; opacity: .8; }
+    .vector { stroke-width: 5; stroke-linecap: round; }
+    .applied { stroke: var(--amber); }
+    .parallel { stroke: var(--cyan); }
+    .normal { stroke: var(--mint); }
+    .contact-point { fill: var(--ink); stroke: var(--night); stroke-width: 3; }
+    .legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px 28px; color: var(--muted); font-size: .78rem; }
+    .legend span { display: inline-flex; align-items: center; gap: 8px; }
+    .swatch { display: inline-block; width: 22px; height: 3px; border-radius: 99px; }
+    .applied-swatch { background: var(--amber); }
+    .parallel-swatch { background: var(--cyan); }
+    .normal-swatch { background: var(--mint); }
+    .readouts { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+    .readout { position: relative; min-height: 118px; padding: 24px; border-right: 1px solid var(--line); }
+    .readout:last-child { border-right: 0; }
+    .readout span { display: block; color: var(--muted); font-size: .78rem; }
+    .readout strong { display: block; margin-top: 8px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: clamp(1.35rem, 3vw, 2.25rem); font-weight: 500; }
+    .readout em { position: absolute; right: 20px; top: 22px; color: var(--line); font-family: Georgia, serif; font-size: 2rem; font-style: normal; }
+    footer { padding: 24px 0 0; color: var(--muted); font-size: .78rem; text-align: center; }
+    @media (max-width: 760px) {
+      .page-shell { width: min(100% - 24px, 1160px); padding-top: 42px; }
+      .hero { margin-bottom: 28px; }
+      .controls, .readouts { grid-template-columns: 1fr; }
+      .control, .readout { border-bottom: 1px solid var(--line); border-right: 0; }
+      .control:last-child, .readout:last-child { border-bottom: 0; }
+      .diagram-wrap { padding: 4px 6px 16px; }
+      .simulator { border-radius: 18px; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .vector, .wall-line, .construction-line { transition: all 120ms ease-out; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page-shell">
+    <header class="hero">
+      <p class="eyebrow">Interactive mechanics lab</p>
+      <h1>Force decomposition,<br>made visible.</h1>
+      <p class="hero-copy">Resolve an applied force into components parallel and perpendicular to an inclined wall. Rotate the wall through a full 360°.</p>
+    </header>
+
+    <section class="simulator" aria-label="Force decomposition simulator">
+      <div class="controls">
+        <label class="control" for="force">
+          <span><strong>Applied force</strong><output id="force-output" for="force">100 N</output></span>
+          <input id="force" type="range" min="10" max="200" step="1" value="100">
+          <small><span>10 N</span><span>200 N</span></small>
+        </label>
+        <label class="control" for="wall-angle">
+          <span><strong>Wall angle</strong><output id="wall-output" for="wall-angle">35°</output></span>
+          <input id="wall-angle" type="range" min="0" max="360" step="1" value="35">
+          <small><span>0°</span><span>360°</span></small>
+        </label>
+        <label class="control" for="force-angle">
+          <span><strong>Force direction</strong><output id="direction-output" for="force-angle">0°</output></span>
+          <input id="force-angle" type="range" min="-180" max="180" step="1" value="0">
+          <small><span>−180°</span><span>180°</span></small>
+        </label>
+      </div>
+
+      <div class="diagram-wrap">
+        <svg id="diagram" viewBox="0 0 720 440" role="img" aria-labelledby="diagram-title diagram-description">
+          <title id="diagram-title">Force vector decomposition</title>
+          <desc id="diagram-description">A force is decomposed into components parallel and perpendicular to an inclined wall.</desc>
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" class="grid-line"></path></pattern>
+            <marker id="arrow-force" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--amber)"></path></marker>
+            <marker id="arrow-parallel" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--cyan)"></path></marker>
+            <marker id="arrow-normal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--mint)"></path></marker>
+          </defs>
+          <rect width="720" height="440" fill="url(#grid)" opacity=".82"></rect>
+          <line x1="36" y1="220" x2="684" y2="220" class="axis-line"></line>
+          <line x1="360" y1="28" x2="360" y2="412" class="axis-line"></line>
+          <line id="wall" class="wall-line"></line>
+          <line id="guide-a" class="construction-line"></line>
+          <line id="guide-b" class="construction-line"></line>
+          <line id="applied-vector" class="vector applied" marker-end="url(#arrow-force)"></line>
+          <line id="parallel-vector" class="vector parallel" marker-end="url(#arrow-parallel)"></line>
+          <line id="normal-vector" class="vector normal" marker-end="url(#arrow-normal)"></line>
+          <circle cx="360" cy="220" r="6" class="contact-point"></circle>
+        </svg>
+        <div class="legend" aria-hidden="true">
+          <span><i class="swatch applied-swatch"></i>Applied force</span>
+          <span><i class="swatch parallel-swatch"></i>Parallel</span>
+          <span><i class="swatch normal-swatch"></i>Perpendicular</span>
+        </div>
+      </div>
+
+      <div class="readouts" aria-live="polite">
+        <div class="readout"><span>Applied</span><strong id="applied-readout">100.0 N</strong></div>
+        <div class="readout"><span>Parallel to wall</span><strong id="parallel-readout">81.9 N</strong><em>F∥</em></div>
+        <div class="readout"><span>Perpendicular to wall</span><strong id="normal-readout">57.4 N</strong><em>F⊥</em></div>
+      </div>
+    </section>
+    <footer>Vector projections use the wall’s local tangent and normal axes.</footer>
+  </main>
+
+  <script>
+    (() => {
+      const forceInput = document.getElementById('force');
+      const wallInput = document.getElementById('wall-angle');
+      const directionInput = document.getElementById('force-angle');
+      const cx = 360;
+      const cy = 220;
+      const screen = (point) => ({ x: cx + point.x, y: cy - point.y });
+      const setLine = (id, start, end) => {
+        const line = document.getElementById(id);
+        line.setAttribute('x1', start.x);
+        line.setAttribute('y1', start.y);
+        line.setAttribute('x2', end.x);
+        line.setAttribute('y2', end.y);
+      };
+      const formatForce = (value) => `${Math.abs(value).toFixed(1)} N`;
+
+      function update() {
+        const force = Number(forceInput.value);
+        const wallAngle = Number(wallInput.value);
+        const forceAngle = Number(directionInput.value);
+        const theta = wallAngle * Math.PI / 180;
+        const phi = forceAngle * Math.PI / 180;
+        const tangent = { x: Math.cos(theta), y: Math.sin(theta) };
+        const normal = { x: Math.sin(theta), y: -Math.cos(theta) };
+        const forceUnit = { x: Math.cos(phi), y: Math.sin(phi) };
+        const parallel = force * (forceUnit.x * tangent.x + forceUnit.y * tangent.y);
+        const perpendicular = force * (forceUnit.x * normal.x + forceUnit.y * normal.y);
+        const scale = Math.min(1.6, 220 / force);
+        const applied = { x: force * scale * forceUnit.x, y: force * scale * forceUnit.y };
+        const parallelVector = { x: parallel * scale * tangent.x, y: parallel * scale * tangent.y };
+        const normalVector = { x: perpendicular * scale * normal.x, y: perpendicular * scale * normal.y };
+        const componentEnd = { x: parallelVector.x + normalVector.x, y: parallelVector.y + normalVector.y };
+        const origin = screen({ x: 0, y: 0 });
+        const wallA = screen({ x: -205 * tangent.x, y: -205 * tangent.y });
+        const wallB = screen({ x: 205 * tangent.x, y: 205 * tangent.y });
+        const appliedEnd = screen(applied);
+        const parallelEnd = screen(parallelVector);
+        const normalEnd = screen(normalVector);
+        const sumEnd = screen(componentEnd);
+
+        setLine('wall', wallA, wallB);
+        setLine('applied-vector', origin, appliedEnd);
+        setLine('parallel-vector', origin, parallelEnd);
+        setLine('normal-vector', parallelEnd, sumEnd);
+        setLine('guide-a', parallelEnd, sumEnd);
+        setLine('guide-b', normalEnd, sumEnd);
+
+        document.getElementById('force-output').textContent = `${force} N`;
+        document.getElementById('wall-output').textContent = `${wallAngle}°`;
+        document.getElementById('direction-output').textContent = `${forceAngle}°`;
+        document.getElementById('applied-readout').textContent = `${force.toFixed(1)} N`;
+        document.getElementById('parallel-readout').textContent = formatForce(parallel);
+        document.getElementById('normal-readout').textContent = formatForce(perpendicular);
+        document.getElementById('diagram-description').textContent = `A ${force} newton force at ${forceAngle} degrees decomposes into ${formatForce(parallel)} parallel and ${formatForce(perpendicular)} perpendicular to a wall at ${wallAngle} degrees.`;
+      }
+
+      [forceInput, wallInput, directionInput].forEach((input) => input.addEventListener('input', update));
+      update();
+    })();
+  </script>
+</body>
+</html>
